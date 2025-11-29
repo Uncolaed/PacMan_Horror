@@ -14,19 +14,23 @@ class Player():
         self.position_delta = pygame.Vector2(math.cos(self.player_angle) * 5,math.sin(self.player_angle)*5)
         self.ONE_DEGREE = .0174533
         self.final_distance = 1
+        self.mouse_sensitivity = 0.001  # Adjust this value to change rotation speed
 
     def update(self):
         # Handles moving the player's coordinates in the 2D space
-        if self.game.actions["left"]: 
-            self.player_angle -= 6 * self.game.dt
+        # Mouse rotation
+        if self.game.actions["mouse_x"] != 0:
+            self.player_angle += self.game.actions["mouse_x"] * self.mouse_sensitivity
+            if self.player_angle > 2 * math.pi: self.player_angle -= 2 * math.pi
             if self.player_angle < 0: self.player_angle += 2 * math.pi
             self.rotate_player()
-        if self.game.actions["right"]:
-            self.player_angle += 6 * self.game.dt
-            if self.player_angle > 2 * math.pi: self.player_angle -= 2 * math.pi
-            self.rotate_player()
+            self.game.actions["mouse_x"] = 0  # Reset mouse delta
+        
+        # WASD movement - forward/back/strafe
         if self.game.actions["up"]: self.move_player(1)
         if self.game.actions["down"]: self.move_player(-1)
+        if self.game.actions["left"]: self.strafe_player(-1)  # Strafe left
+        if self.game.actions["right"]: self.strafe_player(1)  # Strafe right
 
     def is_colliding(self, x, y):
         rel_x = int(x) >> 6
@@ -43,6 +47,21 @@ class Player():
         newy = self.position.y + self.position_delta.y *   self.game.dt * direction * 10
         # Check if new position is a wall. If it is, don't move
         if not self.is_colliding(newx,newy):
+            self.position.x = newx
+            self.position.y = newy
+
+    def strafe_player(self, direction):
+        # Calculate perpendicular direction (90 degrees to the right)
+        strafe_angle = self.player_angle + math.pi / 2
+        strafe_x = math.cos(strafe_angle) * 5
+        strafe_y = math.sin(strafe_angle) * 5
+        
+        # Calculate new position
+        newx = self.position.x + strafe_x * self.game.dt * direction * 10
+        newy = self.position.y + strafe_y * self.game.dt * direction * 10
+        
+        # Check if new position is a wall. If it is, don't move
+        if not self.is_colliding(newx, newy):
             self.position.x = newx
             self.position.y = newy
 
