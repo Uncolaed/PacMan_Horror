@@ -1,0 +1,182 @@
+def cast_rays():
+    """Cast rays and draw them on the minimap"""
+    global PLAYER_POS_X, PLAYER_POS_Y, PLAYER_ANGLE
+
+    ray_angle = PLAYER_ANGLE - FOV / 2
+
+    for ray in range(NUM_RAYS):
+        # Normalize ray angle
+        ray_angle = ray_angle % (2 * pi)
+
+        # Ray direction vector
+        ray_dir_x = cos(ray_angle)
+        ray_dir_y = sin(ray_angle)
+
+        # Player's position in map coordinates
+        map_x = int(PLAYER_POS_X / TILE_SIZE)
+        map_y = int(PLAYER_POS_Y / TILE_SIZE)
+
+        # Length of ray from current position to next x or y-side
+        delta_dist_x = abs(1 / ray_dir_x) if ray_dir_x != 0 else 1e30
+        delta_dist_y = abs(1 / ray_dir_y) if ray_dir_y != 0 else 1e30
+
+        # Direction to step in x or y direction (either +1 or -1)
+        step_x = 1 if ray_dir_x >= 0 else -1
+        step_y = 1 if ray_dir_y >= 0 else -1
+
+        # Length of ray from one x or y-side to next x or y-side
+        if ray_dir_x < 0:
+            side_dist_x = (PLAYER_POS_X / TILE_SIZE - map_x) * delta_dist_x
+        else:
+            side_dist_x = (map_x + 1.0 - PLAYER_POS_X / TILE_SIZE) * delta_dist_x
+
+        if ray_dir_y < 0:
+            side_dist_y = (PLAYER_POS_Y / TILE_SIZE - map_y) * delta_dist_y
+        else:
+            side_dist_y = (map_y + 1.0 - PLAYER_POS_Y / TILE_SIZE) * delta_dist_y
+
+        # Perform DDA (Digital Differential Analysis)
+        hit = 0  # Was a wall hit?
+        side = 0  # Was a NS or EW wall hit?
+
+        while hit == 0:
+            # Jump to next map square, either in x-direction, or in y-direction
+            if side_dist_x < side_dist_y:
+                side_dist_x += delta_dist_x
+                map_x += step_x
+                side = 0
+            else:
+                side_dist_y += delta_dist_y
+                map_y += step_y
+                side = 1
+
+            # Check if ray has hit a wall
+            if map_x < 0 or map_x >= MAP_SIZE_X or map_y < 0 or map_y >= MAP_SIZE_Y:
+                hit = 1  # Ray went out of bounds
+            elif my_map[map_y * MAP_SIZE_X + map_x] == 1:
+                hit = 1  # Ray hit a wall
+
+        # Calculate distance projected on camera direction
+        if side == 0:
+            perp_wall_dist = (map_x - PLAYER_POS_X / TILE_SIZE + (1 - step_x) / 2) / ray_dir_x
+        else:
+            perp_wall_dist = (map_y - PLAYER_POS_Y / TILE_SIZE + (1 - step_y) / 2) / ray_dir_y
+
+        # Calculate where the ray hit the wall
+        if side == 0:
+            wall_x = PLAYER_POS_Y / TILE_SIZE + perp_wall_dist * ray_dir_y
+        else:
+            wall_x = PLAYER_POS_X / TILE_SIZE + perp_wall_dist * ray_dir_x
+        wall_x -= int(wall_x)
+
+        # Calculate height of line to draw on screen
+        line_height = int(WINDOW_HEIGHT / perp_wall_dist) if perp_wall_dist > 0 else WINDOW_HEIGHT
+
+        # Draw the ray on the minimap
+        ray_end_x = PLAYER_POS_X + cos(ray_angle) * perp_wall_dist * TILE_SIZE
+        ray_end_y = PLAYER_POS_Y + sin(ray_angle) * perp_wall_dist * TILE_SIZE
+
+        glColor3f(1.0, 0.0, 0.0)  # Red color for rays
+        glLineWidth(1)
+        glBegin(GL_LINES)
+        glVertex2f(PLAYER_POS_X, PLAYER_POS_Y)
+        glVertex2f(ray_end_x, ray_end_y)
+        glEnd()
+
+        # Move to next ray
+        ray_angle += FOV / NUM_RAYS
+
+
+def draw_3d_view():
+    """Draw a simple 3D representation based on raycasting"""
+    glColor3f(0.2, 0.2, 0.2)
+    glBegin(GL_QUADS)
+    glVertex2i(WINDOW_WIDTH // 2, 0)
+    glVertex2i(WINDOW_WIDTH, 0)
+    glVertex2i(WINDOW_WIDTH, WINDOW_HEIGHT)
+    glVertex2i(WINDOW_WIDTH // 2, WINDOW_HEIGHT)
+    glEnd()
+
+    ray_angle = PLAYER_ANGLE - FOV / 2
+    ray_width = (WINDOW_WIDTH // 2) / NUM_RAYS
+
+    for ray in range(NUM_RAYS):
+        # Normalize ray angle
+        ray_angle = ray_angle % (2 * pi)
+
+        # Ray direction vector
+        ray_dir_x = cos(ray_angle)
+        ray_dir_y = sin(ray_angle)
+
+        # Player's position in map coordinates
+        map_x = int(PLAYER_POS_X / TILE_SIZE)
+        map_y = int(PLAYER_POS_Y / TILE_SIZE)
+
+        # Length of ray from current position to next x or y-side
+        delta_dist_x = abs(1 / ray_dir_x) if ray_dir_x != 0 else 1e30
+        delta_dist_y = abs(1 / ray_dir_y) if ray_dir_y != 0 else 1e30
+
+        # Direction to step in x or y direction (either +1 or -1)
+        step_x = 1 if ray_dir_x >= 0 else -1
+        step_y = 1 if ray_dir_y >= 0 else -1
+
+        # Length of ray from one x or y-side to next x or y-side
+        if ray_dir_x < 0:
+            side_dist_x = (PLAYER_POS_X / TILE_SIZE - map_x) * delta_dist_x
+        else:
+            side_dist_x = (map_x + 1.0 - PLAYER_POS_X / TILE_SIZE) * delta_dist_x
+
+        if ray_dir_y < 0:
+            side_dist_y = (PLAYER_POS_Y / TILE_SIZE - map_y) * delta_dist_y
+        else:
+            side_dist_y = (map_y + 1.0 - PLAYER_POS_Y / TILE_SIZE) * delta_dist_y
+
+        # Perform DDA (Digital Differential Analysis)
+        hit = 0
+        side = 0
+
+        while hit == 0:
+            if side_dist_x < side_dist_y:
+                side_dist_x += delta_dist_x
+                map_x += step_x
+                side = 0
+            else:
+                side_dist_y += delta_dist_y
+                map_y += step_y
+                side = 1
+
+            if map_x < 0 or map_x >= MAP_SIZE_X or map_y < 0 or map_y >= MAP_SIZE_Y:
+                hit = 1
+            elif my_map[map_y * MAP_SIZE_X + map_x] == 1:
+                hit = 1
+
+        # Calculate distance projected on camera direction
+        if side == 0:
+            perp_wall_dist = (map_x - PLAYER_POS_X / TILE_SIZE + (1 - step_x) / 2) / ray_dir_x
+        else:
+            perp_wall_dist = (map_y - PLAYER_POS_Y / TILE_SIZE + (1 - step_y) / 2) / ray_dir_y
+
+        # Calculate height of line to draw on screen
+        line_height = int(WINDOW_HEIGHT / perp_wall_dist) if perp_wall_dist > 0 else WINDOW_HEIGHT
+
+        # Calculate lowest and highest pixel to fill in current stripe
+        draw_start = max(-line_height // 2 + WINDOW_HEIGHT // 2, 0)
+        draw_end = min(line_height // 2 + WINDOW_HEIGHT // 2, WINDOW_HEIGHT - 1)
+
+        # Choose wall color based on side hit
+        if side == 1:
+            glColor3f(0.7, 0.7, 0.7)  # Darker color for y-side walls
+        else:
+            glColor3f(0.9, 0.9, 0.9)  # Lighter color for x-side walls
+
+        # Draw the wall slice
+        x_pos = WINDOW_WIDTH // 2 + ray * ray_width
+        glBegin(GL_QUADS)
+        glVertex2f(x_pos, draw_start)
+        glVertex2f(x_pos + ray_width, draw_start)
+        glVertex2f(x_pos + ray_width, draw_end)
+        glVertex2f(x_pos, draw_end)
+        glEnd()
+
+        # Move to next ray
+        ray_angle += FOV / NUM_RAYS
