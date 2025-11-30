@@ -1,7 +1,7 @@
 import pygame, os, time
 from player import Player
 from levels.map import Map
-
+from textures.texture_manger import TextureManager,TextureID
 from OpenGL.GL import *
 from OpenGL.GLU import *
 
@@ -11,9 +11,13 @@ class Game():
         self.DISPLAY_W, self.DISPLAY_H = 1024, 510
         self.DISPLAY3D_W, self.DISPLAY3D_H = 320, 160
         self.display_open_gl(self.DISPLAY_W, self.DISPLAY_H)
-
+        
+        # load textures
+        self.texture_manager = TextureManager()
+        self.texture_manager.load_texture(TextureID.BRICK, "textures/brick.png")
+        
         self.running, self.playing = True, True
-        self.dir = os.path.dirname(os.path.abspath("game.py"))
+        self.dir = os.path.dirname(os.path.abspath("main.py"))
         self.actions = {"left": False, "right": False, "up": False, "down": False, "mouse_x": 0}
         self.prev_time = time.time()
         self.player = Player(self)
