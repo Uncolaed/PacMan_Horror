@@ -1,6 +1,7 @@
 from gameplay.player import Player
 from core.renderer import Renderer
 from core.map import Map
+from core.raycaster import RayCaster
 from OpenGL.GL import *
 from OpenGL.GLU import *
 
@@ -9,6 +10,7 @@ class Engine:
         self.game = game
         self.map = Map(self.game)
         self.player = Player(self)
+        self.raycaster = RayCaster(self)
         self.renderer = Renderer(self)
         
     def update(self):

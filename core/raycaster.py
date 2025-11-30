@@ -1,274 +1,238 @@
-from typing import TYPE_CHECKING
-if TYPE_CHECKING:
-    from core.engine import Engine
-    from main import Game
-
-import math
-from math import sin, cos, pi, tan
+from math import sin, cos, tan, pi, inf
 
 class RayCaster:
     def __init__(self, engine):
-        self.engine: Engine = engine
-        self.game: Game = engine.game
-        
-        # Raycasting configuration
-        self.fov = pi / 3  # 60 degrees field of view
-        self.num_rays = 240 # Number of rays to cast
-    
-    def check_horizontal_intersection(self, player_pos_x, player_pos_y, ray_angle, game_map, map_size_x, map_size_y, tile_size):
-        """
-        Check for horizontal grid line intersections.
-        
-        Returns:
-            tuple: (hit_x, hit_y, distance) or (None, None, float('inf')) if no hit
-        """
-        # Determine if ray is facing up or down
-        ray_facing_down = ray_angle > 0 and ray_angle < pi
-        
-        # Find first horizontal grid intersection
-        if ray_facing_down:
-            y_intersect = (int(player_pos_y / tile_size) + 1) * tile_size
-        else:
-            y_intersect = int(player_pos_y / tile_size) * tile_size
-        
-        # Calculate x coordinate of first intersection
-        if tan(ray_angle) != 0:
-            x_intersect = player_pos_x + (y_intersect - player_pos_y) / tan(ray_angle)
-        else:
-            return None, None, float('inf')
-        
-        # Calculate step sizes
-        y_step = tile_size if ray_facing_down else -tile_size
-        if tan(ray_angle) != 0:
-            x_step = tile_size / tan(ray_angle)
-        else:
-            x_step = 0
-        
-        # Make sure x_step has the correct sign
-        if (ray_angle > pi / 2 and ray_angle < 3 * pi / 2 and x_step > 0) or \
-           (ray_angle < pi / 2 or ray_angle > 3 * pi / 2) and x_step < 0:
-            x_step = -x_step
-        
-        # Check intersections along the ray
-        while True:
-            # Check which grid cell to test
-            check_y = int(y_intersect / tile_size)
-            if not ray_facing_down:
-                check_y -= 1
-            check_x = int(x_intersect / tile_size)
-            
-            # Check bounds
-            if check_x < 0 or check_x >= map_size_x or check_y < 0 or check_y >= map_size_y:
-                return None, None, float('inf')
-            
-            # Check if there's a wall
-            if game_map[check_y * map_size_x + check_x] == 1:
-                # Calculate distance
-                dx = x_intersect - player_pos_x
-                dy = y_intersect - player_pos_y
-                distance = (dx * dx + dy * dy) ** 0.5
-                return x_intersect, y_intersect, distance
-            
-            # Move to next intersection
-            x_intersect += x_step
-            y_intersect += y_step
-    
-    def check_vertical_intersection(self, player_pos_x, player_pos_y, ray_angle, game_map, map_size_x, map_size_y, tile_size):
-        """
-        Check for vertical grid line intersections.
-        
-        Returns:
-            tuple: (hit_x, hit_y, distance) or (None, None, float('inf')) if no hit
-        """
-        # Determine if ray is facing right or left
-        ray_facing_right = ray_angle < pi / 2 or ray_angle > 3 * pi / 2
-        
-        # Find first vertical grid intersection
-        if ray_facing_right:
-            x_intersect = (int(player_pos_x / tile_size) + 1) * tile_size
-        else:
-            x_intersect = int(player_pos_x / tile_size) * tile_size
-        
-        # Calculate y coordinate of first intersection
-        y_intersect = player_pos_y + (x_intersect - player_pos_x) * tan(ray_angle)
-        
-        # Calculate step sizes
-        x_step = tile_size if ray_facing_right else -tile_size
-        y_step = tile_size * tan(ray_angle)
-        
-        # Make sure y_step has the correct sign
-        if (ray_angle > pi and y_step > 0) or (ray_angle < pi and y_step < 0):
-            y_step = -y_step
-        
-        # Check intersections along the ray
-        while True:
-            # Check which grid cell to test
-            check_x = int(x_intersect / tile_size)
-            if not ray_facing_right:
-                check_x -= 1
-            check_y = int(y_intersect / tile_size)
-            
-            # Check bounds
-            if check_x < 0 or check_x >= map_size_x or check_y < 0 or check_y >= map_size_y:
-                return None, None, float('inf')
-            
-            # Check if there's a wall
-            if game_map[check_y * map_size_x + check_x] == 1:
-                # Calculate distance
-                dx = x_intersect - player_pos_x
-                dy = y_intersect - player_pos_y
-                distance = (dx * dx + dy * dy) ** 0.5
-                return x_intersect, y_intersect, distance
-            
-            # Move to next intersection
-            x_intersect += x_step
-            y_intersect += y_step
-        
-    def cast_rays(self, player_pos_x, player_pos_y, player_angle, game_map, map_size_x, map_size_y, tile_size):
-        """
-        Cast rays from player position and return ray data.
-        Uses separate horizontal and vertical intersection checks.
-        
-        Args:
-            player_pos_x: Player's X position
-            player_pos_y: Player's Y position
-            player_angle: Player's viewing angle
-            game_map: List representing the map (1 = wall, 0 = empty)
-            map_size_x: Map width in tiles
-            map_size_y: Map height in tiles
-            tile_size: Size of each tile
-            
-        Returns:
-            List of dicts with ray data
-        """
-        ray_data = []
-        ray_angle = player_angle - self.fov / 2
+        self.engine = engine
+        self.game = engine.game
 
-        for ray in range(self.num_rays):
-            # Normalize ray angle
-            ray_angle = ray_angle % (2 * pi)
+        self.fov = pi / 3          # 60° FOV
+        self.num_rays = 240        # Number of rays
+        self.delta_angle = self.fov / self.num_rays
 
-            # Check horizontal intersections
-            h_x, h_y, h_dist = self.check_horizontal_intersection(
-                player_pos_x, player_pos_y, ray_angle, game_map, map_size_x, map_size_y, tile_size
-            )
-            
-            # Check vertical intersections
-            v_x, v_y, v_dist = self.check_vertical_intersection(
-                player_pos_x, player_pos_y, ray_angle, game_map, map_size_x, map_size_y, tile_size
-            )
-            
-            # Choose the closer intersection
-            if h_dist < v_dist:
-                ray_end_x, ray_end_y = h_x, h_y
-                distance = h_dist
-                side = 1  # Horizontal wall hit
+    # ------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------
+
+    @staticmethod
+    def distance(ax, ay, bx, by):
+        dx = bx - ax
+        dy = by - ay
+        return (dx * dx + dy * dy) ** 0.5
+
+    def tile_at(self, game_map, mx, my, size_x, size_y):
+        if mx < 0 or mx >= size_x or my < 0 or my >= size_y:
+            return None
+        return game_map[my * size_x + mx]
+
+    # ------------------------------------------------------------
+    # Unified grid traversal for horizontal or vertical intersection
+    # ------------------------------------------------------------
+
+    def trace_intersection(
+        self,
+        px, py,
+        ray_angle,
+        game_map, size_x, size_y, tile,
+        vertical=False
+    ):
+        """
+        Generic grid stepping used for both horizontal & vertical checks.
+        vertical = True → stepping on vertical grid lines
+        vertical = False → stepping on horizontal grid lines
+        """
+
+        sin_a = sin(ray_angle)
+        cos_a = cos(ray_angle)
+        tan_a = sin_a / cos_a if cos_a != 0 else None
+
+        # -------------------------------
+        # INITIAL INTERSECTION AND STEPS
+        # -------------------------------
+        if vertical:
+            # Ray facing right?
+            right = (ray_angle < pi / 2) or (ray_angle > 3 * pi / 2)
+
+            # first vertical gridline
+            x_inter = (int(px / tile) + (1 if right else 0)) * tile
+            if not right:
+                x_inter -= 0  # keep same (int * tile) already correct
+
+            if tan_a is None:
+                return None, None, inf
+
+            y_inter = py + (x_inter - px) * tan_a
+
+            x_step = tile if right else -tile
+            y_step = x_step * tan_a
+
+        else:
+            # Ray facing down?
+            down = (0 < ray_angle < pi)
+
+            # first horizontal gridline
+            y_inter = (int(py / tile) + (1 if down else 0)) * tile
+            if not down:
+                y_inter -= 0
+
+            if tan_a == 0 or tan_a is None:
+                return None, None, inf
+
+            x_inter = px + (y_inter - py) / tan_a
+
+            y_step = tile if down else -tile
+            x_step = y_step / tan_a
+
+        # --------------------------------------
+        # Correct stepping orientation signs
+        # --------------------------------------
+        # vertical walls need to detect vertical orientation of ray
+        if vertical:
+            # If ray is facing up but y_step is positive, flip, etc.
+            if (sin_a < 0 and y_step > 0) or (sin_a > 0 and y_step < 0):
+                y_step = -y_step
+        else:
+            # horizontal walls need proper x_step sign
+            if (cos_a < 0 and x_step > 0) or (cos_a > 0 and x_step < 0):
+                x_step = -x_step
+
+        # ----------------------------------------------------
+        # GRID TRAVERSAL
+        # ----------------------------------------------------
+        x, y = x_inter, y_inter
+
+        while True:
+            # Which tile to check?
+            tile_x = int(x / tile)
+            tile_y = int(y / tile)
+
+            # Offsets for touching boundary
+            if vertical:
+                if cos_a < 0:
+                    tile_x -= 1
             else:
-                ray_end_x, ray_end_y = v_x, v_y
-                distance = v_dist
-                side = 0  # Vertical wall hit
-            
-            # Calculate perpendicular distance (fixes fisheye effect)
-            perp_wall_dist = distance * cos(ray_angle - player_angle)
-            
-            # Calculate wall_x (texture coordinate)
-            if side == 0:  # Vertical wall
-                wall_x = (ray_end_y / tile_size) % 1.0
-            else:  # Horizontal wall
-                wall_x = (ray_end_x / tile_size) % 1.0
+                if sin_a < 0:
+                    tile_y -= 1
 
-            # Store ray data
-            ray_data.append({
-                'start_x': player_pos_x,
-                'start_y': player_pos_y,
-                'end_x': ray_end_x,
-                'end_y': ray_end_y,
-                'distance': perp_wall_dist,
-                'side': side,
-                'wall_x': wall_x,
-                'angle': ray_angle
+            # Out of bounds?
+            tile_val = self.tile_at(game_map, tile_x, tile_y, size_x, size_y)
+            if tile_val is None:
+                return None, None, inf
+
+            # Wall hit?
+            if tile_val == 1:
+                dist = self.distance(px, py, x, y)
+                return x, y, dist
+
+            # Step further along gridline
+            x += x_step
+            y += y_step
+
+    # ------------------------------------------------------------
+    # Ray casting core
+    # ------------------------------------------------------------
+
+    def cast_rays(self, px, py, pa, game_map, size_x, size_y, tile):
+        rays = []
+        ray_angle = pa - self.fov / 2
+
+        for _ in range(self.num_rays):
+            ray_angle %= (2 * pi)
+
+            # horizontal intersection
+            hx, hy, hd = self.trace_intersection(
+                px, py, ray_angle,
+                game_map, size_x, size_y, tile,
+                vertical=False
+            )
+
+            # vertical intersection
+            vx, vy, vd = self.trace_intersection(
+                px, py, ray_angle,
+                game_map, size_x, size_y, tile,
+                vertical=True
+            )
+
+            # which one is closer?
+            if hd < vd:
+                end_x, end_y = hx, hy
+                dist = hd
+                side = 1  # horizontal hit
+            else:
+                end_x, end_y = vx, vy
+                dist = vd
+                side = 0  # vertical hit
+
+            # fisheye correction
+            perp_dist = dist * cos(ray_angle - pa)
+
+            # texture offset
+            if side == 0:  # vertical wall
+                wall_x = (end_y / tile) % 1.0
+            else:          # horizontal wall
+                wall_x = (end_x / tile) % 1.0
+
+            rays.append({
+                "start_x": px,
+                "start_y": py,
+                "end_x": end_x,
+                "end_y": end_y,
+                "distance": perp_dist,
+                "side": side,
+                "wall_x": wall_x,
+                "angle": ray_angle
             })
 
-            # Move to next ray
-            ray_angle += self.fov / self.num_rays
-            
-        return ray_data
+            ray_angle += self.delta_angle
 
-    def get_3d_view_data(self, player_pos_x, player_pos_y, player_angle, game_map, map_size_x, map_size_y, 
-                         tile_size, window_height):
-        """
-        Calculate 3D view data based on raycasting without drawing.
-        Uses separate horizontal and vertical intersection checks.
-        
-        Args:
-            player_pos_x: Player's X position
-            player_pos_y: Player's Y position
-            player_angle: Player's viewing angle
-            game_map: List representing the map (1 = wall, 0 = empty)
-            map_size_x: Map width in tiles
-            map_size_y: Map height in tiles
-            tile_size: Size of each tile
-            window_height: Height of the window
-            
-        Returns:
-            List of dicts with wall slice data
-        """
-        wall_data = []
-        ray_angle = player_angle - self.fov / 2
+        return rays
 
-        for ray in range(self.num_rays):
-            # Normalize ray angle
-            ray_angle = ray_angle % (2 * pi)
+    # ------------------------------------------------------------
+    # 3D projection data
+    # ------------------------------------------------------------
 
-            # Check horizontal intersections
-            h_x, h_y, h_dist = self.check_horizontal_intersection(
-                player_pos_x, player_pos_y, ray_angle, game_map, map_size_x, map_size_y, tile_size
+    def get_3d_view_data(
+        self,
+        px, py, pa,
+        game_map, size_x, size_y,
+        tile, window_height
+    ):
+        wall_slices = []
+        ray_angle = pa - self.fov / 2
+
+        for _ in range(self.num_rays):
+            ray_angle %= (2 * pi)
+
+            # horizontal
+            hx, hy, hd = self.trace_intersection(
+                px, py, ray_angle, game_map, size_x, size_y, tile, vertical=False
             )
-            
-            # Check vertical intersections
-            v_x, v_y, v_dist = self.check_vertical_intersection(
-                player_pos_x, player_pos_y, ray_angle, game_map, map_size_x, map_size_y, tile_size
+            # vertical
+            vx, vy, vd = self.trace_intersection(
+                px, py, ray_angle, game_map, size_x, size_y, tile, vertical=True
             )
-            
-            # Choose the closer intersection
-            if h_dist < v_dist:
-                ray_end_x, ray_end_y = h_x, h_y
-                distance = h_dist
-                side = 1  # Horizontal wall hit
+
+            if hd < vd:
+                end_x, end_y, dist, side = hx, hy, hd, 1
             else:
-                ray_end_x, ray_end_y = v_x, v_y
-                distance = v_dist
-                side = 0  # Vertical wall hit
-            
-            # Calculate perpendicular distance (fixes fisheye effect)
-            perp_wall_dist = distance * cos(ray_angle - player_angle)
-            
-            # Calculate height of line to draw on screen
-            line_height = int(window_height / perp_wall_dist) if perp_wall_dist > 0 else window_height
+                end_x, end_y, dist, side = vx, vy, vd, 0
 
-            # Calculate lowest and highest pixel to fill in current stripe
-            draw_start = max(-line_height // 2 + window_height // 2, 0)
-            draw_end = min(line_height // 2 + window_height // 2, window_height - 1)
+            perp_dist = dist * cos(ray_angle - pa)
+            line_height = int(window_height / perp_dist) if perp_dist > 0 else window_height
 
-            # Calculate wall_x (texture coordinate)
-            if side == 0:  # Vertical wall
-                wall_x = (ray_end_y / tile_size) % 1.0
-            else:  # Horizontal wall
-                wall_x = (ray_end_x / tile_size) % 1.0
+            draw_start = max((window_height // 2) - (line_height // 2), 0)
+            draw_end = min((window_height // 2) + (line_height // 2), window_height - 1)
 
-            # Store wall slice data
-            wall_data.append({
-                'draw_start': draw_start,
-                'draw_end': draw_end,
-                'side': side,
-                'distance': perp_wall_dist,
-                'wall_x': wall_x,
-                'line_height': line_height
+            wall_x = (end_y / tile) % 1.0 if side == 0 else (end_x / tile) % 1.0
+
+            wall_slices.append({
+                "draw_start": draw_start,
+                "draw_end": draw_end,
+                "side": side,
+                "distance": perp_dist,
+                "wall_x": wall_x,
+                "line_height": line_height
             })
-            
 
-            # Move to next ray
-            ray_angle += self.fov / self.num_rays
-            
-        return wall_data
-    
+            ray_angle += self.delta_angle
+
+        return wall_slices
