@@ -19,9 +19,19 @@ class Game:
         self.clock = pg.time.Clock()
         self.running = True
         self.engine = Engine(self)
-        # init openGL context
         self.init_opengl()
+        self.prev_time = time.time()
+        self.fps_list = []
         
+        # Better approach: Set relative mouse mode
+        pg.event.set_grab(True)      
+        pg.mouse.set_visible(False)
+        pg.event.set_grab(True)
+        try:
+            pg.mouse.set_relative_mouse_mode(True)  # This auto-centers
+        except:
+            pg.mouse.get_rel()  # Fallback: flush initial movement
+            
     def init_opengl(self):
         glClearColor(0.3, 0.3, 0.3, 0)
         glMatrixMode(GL_PROJECTION)
@@ -30,6 +40,19 @@ class Game:
         glMatrixMode(GL_MODELVIEW)
         glLoadIdentity()
     
+    def get_dt(self):
+        now = time.time()
+        self.dt = now - self.prev_time
+        self.prev_time = now
+        self.get_fps()
+    def get_fps(self):
+        fps = 1 / self.dt if self.dt else 0
+        if len(self.fps_list) == 50:
+            self.fps_list.pop(0)
+        self.fps_list.append(fps)
+        avg_fps = sum(self.fps_list) / len(self.fps_list)
+        pg.display.set_caption("Raycaster - FPS: " + str(round(avg_fps, 2)))
+    
     def handle_events(self):
         for event in pg.event.get():
             if event.type == pg.QUIT:
@@ -37,15 +60,15 @@ class Game:
             elif event.type == pg.KEYDOWN:
                 if event.key == K_ESCAPE:
                     self.running = False
-                # elif event.key == K_c:  # Toggle camera shake
-                    # trigger_camera_shake()
                     
-        # self.player.handle_events()
+        self.engine.handle_events()
     def game_loop(self):
+        self.clock.tick()  # Updates clock without capping FPS
+        self.get_dt()
         self.handle_events()
+        self.engine.update()
         self.engine.display()
         pg.display.flip()
-        self.clock.tick(60)
             
 if __name__ == "__main__":
     game = Game()

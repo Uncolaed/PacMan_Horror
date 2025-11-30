@@ -8,8 +8,6 @@ if TYPE_CHECKING:
 class Renderer():
     def __init__(self, engine: 'Engine'):
         self.engine = engine
-        self.PLAYER_POS = self.engine.player.position
-        self.PLAYER_POS_DELTA = self.engine.player.position_delta
         
         # Minimap settings
         self.minimap_scale = 0.15  # 15% of screen size
@@ -61,16 +59,21 @@ class Renderer():
     def draw_2d_player(self):
         glPushMatrix()
 
+        # Get live references each frame
+        pos = self.engine.player.position
+        delta = self.engine.player.position_delta
+
         glColor3f(1.0, 1.0, 0.0)
         glPointSize(8)
         glBegin(GL_POINTS)
-        glVertex2f(self.PLAYER_POS.x, self.PLAYER_POS.y)
+        glVertex2f(pos.x, pos.y)
         glEnd()
 
+        
         glLineWidth(3)
         glBegin(GL_LINES)
-        glVertex2f(self.PLAYER_POS.x, self.PLAYER_POS.y)
-        glVertex2f(self.PLAYER_POS.x + self.PLAYER_POS_DELTA.x * 5, self.PLAYER_POS.y + self.PLAYER_POS_DELTA.y * 5)
+        glVertex2f(pos.x, pos.y)
+        glVertex2f(pos.x + delta.x * 50, pos.y + delta.y * 50)
         glEnd()
 
         glPopMatrix()
