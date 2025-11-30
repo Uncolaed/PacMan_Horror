@@ -2,7 +2,7 @@ import pygame, math
 
 from OpenGL.GL import *
 from OpenGL.GLU import *
-
+import utils 
 
 class Player():
     def __init__(self, game):
@@ -14,17 +14,27 @@ class Player():
         self.position_delta = pygame.Vector2(math.cos(self.player_angle) * 5,math.sin(self.player_angle)*5)
         self.ONE_DEGREE = .0174533
         self.final_distance = 1
-        self.mouse_sensitivity = 0.001  # Adjust this value to change rotation speed
+        self.mouse_sensitivity = 0.01  # Adjust this value to change rotation speed
+        self.texture = utils.load_csv_auto('./textures/brick_texture.csv')
+        print(self.texture)
 
     def update(self):
         # Handles moving the player's coordinates in the 2D space
         # Mouse rotation
         if self.game.actions["mouse_x"] != 0:
-            self.player_angle += self.game.actions["mouse_x"] * self.mouse_sensitivity
-            if self.player_angle > 2 * math.pi: self.player_angle -= 2 * math.pi
-            if self.player_angle < 0: self.player_angle += 2 * math.pi
+            dx = self.game.actions["mouse_x"]
+
+            # FPS-INDEPENDENT ROTATION
+            self.player_angle += dx * self.mouse_sensitivity * (60 * self.game.dt)
+
+            if self.player_angle > 2 * math.pi: 
+                self.player_angle -= 2 * math.pi
+            if self.player_angle < 0: 
+                self.player_angle += 2 * math.pi
+
             self.rotate_player()
             self.game.actions["mouse_x"] = 0  # Reset mouse delta
+
         
         # WASD movement - forward/back/strafe
         if self.game.actions["up"]: self.move_player(1)
@@ -43,8 +53,8 @@ class Player():
 
     def move_player(self, direction):
         # Calculate new position
-        newx = self.position.x +self.position_delta.x *   self.game.dt * direction * 10
-        newy = self.position.y + self.position_delta.y *   self.game.dt * direction * 10
+        newx = self.position.x + self.position_delta.x * self.game.dt * direction * 10
+        newy = self.position.y + self.position_delta.y * self.game.dt * direction * 10
         # Check if new position is a wall. If it is, don't move
         if not self.is_colliding(newx,newy):
             self.position.x = newx
@@ -102,15 +112,22 @@ class Player():
             glEnd()
             # Draw 3D Walls
             # Draw the 3D walls
-            cos_angle = self.radian_bound(self.player_angle - self.ray_angle) # Fix Fish eye effect
+
+            # Fix Fish eye effect (DO NOT wrap angle)
+            cos_angle = (self.player_angle - self.ray_angle)
             self.final_distance *= math.cos(cos_angle)
+
             line_height = min((self.game.map.grid_size*self.game.DISPLAY3D_W)/self.final_distance,self.game.DISPLAY3D_W)
             offset3d = int(self.game.DISPLAY3D_H - line_height/2)
             glLineWidth(8)
-            glBegin(GL_LINES)
-            glVertex2i(i*8 + 530,offset3d)
-            glVertex2i(i*8 + 530,int(line_height) + offset3d)
-            glEnd()
+            
+            ty = 0
+            ty_step = 32.0 / float(line_height)
+            for y in range(int(line_height)):
+                glPointSize(8)
+                glBegin(GL_POINTS)
+                glVertex2i(i*8 + 530,y+offset3d)
+                glEnd()
             # Increment angle by one degree
             self.ray_angle = self.radian_bound( self.ray_angle + self.ONE_DEGREE)
 
@@ -120,18 +137,21 @@ class Player():
         int_x, int_y = int(self.position.x), int(self.position.y)
         ray_x,ray_y,dof,y_off,x_off = 0,0,0,0,0
         aTan = -1 / math.tan(self.ray_angle)
+
         if self.ray_angle > math.pi: # Check for Grid Lines looking Up
             ray_y = ((int_y >>6)<<6) - .0001
             ray_x = (self.position.y - ray_y) * aTan + self.position.x
             y_off = -64
             x_off = -y_off * aTan
+
         elif self.ray_angle < math.pi: # Check for grid lines looking down
             ray_y = ((int_y >>6)<<6) + 64
             ray_x = (self.position.y - ray_y) * aTan + self.position.x
             y_off = 64
             x_off = -y_off * aTan
+
         else:
-            ray_x, ray_y = self.player.x, self.player.y
+            ray_x, ray_y = self.position.x, self.position.y
             dof = 8
         
         while dof < 8:
@@ -156,25 +176,29 @@ class Player():
         int_x, int_y = int(self.position.x), int(self.position.y)
         ray_x,ray_y,dof,y_off,x_off = 0,0,0,0,0
         nTan = -1*math.tan(self.ray_angle)
+
         if self.ray_angle > HALF_PI and self.ray_angle < THREE_PI_DIV2: # Check for grid lines facing left
             ray_x = ((int_x >>6)<<6) - .0001
             ray_y = (self.position.x - ray_x) * nTan + self.position.y
             x_off = -64
             y_off = -x_off * nTan
+
         elif self.ray_angle < HALF_PI or self.ray_angle > THREE_PI_DIV2:# Check for grid lines facing right
             ray_x = ((int_x >>6)<<6) + 64
             ray_y = (self.position.x - ray_x) * nTan + self.position.y
             x_off = 64
             y_off = -x_off * nTan
+
         else:
-            ray_x, ray_y = self.player.x, self.player.y
+            ray_x, ray_y = self.position.x, self.position.y
             dof = 8
         
         while dof < 8:
             map_x = int(ray_x) >> 6
             map_y = int(ray_y) >> 6
-            map_x = max(min(map_x,7),0)
-            map_y = max(min(map_y,7),0)
+            map_x = max(min(map_x,self.game.map.grid_x - 1),0)
+            map_y = max(min(map_y,self.game.map.grid_y - 1),0)
+
             if self.game.map.map_grid[map_y][map_x] == 1: 
                 self.vray_x, self.vray_y = ray_x, ray_y
                 self.Vdist = math.hypot(self.position.x - self.vray_x, self.position.y - self.vray_y)
