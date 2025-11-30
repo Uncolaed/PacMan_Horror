@@ -15,8 +15,6 @@ class Player():
         self.ONE_DEGREE = .0174533
         self.final_distance = 1
         self.mouse_sensitivity = 0.01  # Adjust this value to change rotation speed
-        self.texture = utils.load_csv_auto('./textures/brick_texture.csv')
-        print(self.texture)
 
     def update(self):
         # Handles moving the player's coordinates in the 2D space

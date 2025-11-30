@@ -20,10 +20,9 @@ class Game():
         self.map = Map(self)
         self.fps_list = []
 
-        # --- FIX FOR PYGAME ≥ 2.6.0 (no set_relative) ---
-        pygame.event.set_grab(True)      # enables relative mouse mode
+        pygame.event.set_grab(True)      
         pygame.mouse.set_visible(False)
-        pygame.mouse.get_rel()           # resets delta buffer
+        pygame.mouse.get_rel()
 
 
     def game_loop(self):
