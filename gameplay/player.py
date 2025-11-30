@@ -17,7 +17,7 @@ class Player:
         self.position_delta = pg.Vector2()
         self.speed = 150
         self.player_angle = 1
-        self.mouse_sensitivity = 0.003
+        self.mouse_sensitivity = 0.0008
         self.actions = {"left": False, "right": False, "up": False, "down": False, "mouse_x": 0}
         
     def get_actions(self):
