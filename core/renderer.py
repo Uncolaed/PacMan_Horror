@@ -111,7 +111,13 @@ class Renderer:
         self.wall_quad_count = 0
         
         # Background buffer: position(2) + color(3) = 5 floats
-        self.bg_buffer = np.zeros((12, 5), dtype=np.float32)
+        # Increased size to accommodate shaded floor/ceiling strips
+        self.floor_ceiling_strips = 32  # Number of strips for gradient effect
+        self.bg_buffer = np.zeros((self.floor_ceiling_strips * 2 * 6, 5), dtype=np.float32)
+        
+        # Floor and ceiling base colors
+        self.ceiling_color = (0.3, 0.3, 0.35)  # Slightly blue-ish gray
+        self.floor_color = (0.25, 0.2, 0.15)   # Brownish gray
 
     def compile_shader(self, source, shader_type):
         """Compile a shader from source."""
@@ -287,24 +293,59 @@ class Renderer:
         self.wall_quad_count = 0
 
     def draw_background_gpu(self, W, H):
-        """Draw background (ceiling and floor) using GPU."""
+        """Draw background (ceiling and floor) with distance-based shading."""
         mid = H // 2
+        num_strips = self.floor_ceiling_strips
+        strip_height = mid / num_strips
         
-        # Ceiling (2 triangles = 6 vertices)
-        self.bg_buffer[0] = [0, 0, 0.3, 0.3, 0.3]
-        self.bg_buffer[1] = [W, 0, 0.3, 0.3, 0.3]
-        self.bg_buffer[2] = [W, mid, 0.3, 0.3, 0.3]
-        self.bg_buffer[3] = [0, 0, 0.3, 0.3, 0.3]
-        self.bg_buffer[4] = [W, mid, 0.3, 0.3, 0.3]
-        self.bg_buffer[5] = [0, mid, 0.3, 0.3, 0.3]
+        vertex_idx = 0
         
-        # Floor (2 triangles = 6 vertices)
-        self.bg_buffer[6] = [0, mid, 0.2, 0.2, 0.2]
-        self.bg_buffer[7] = [W, mid, 0.2, 0.2, 0.2]
-        self.bg_buffer[8] = [W, H, 0.2, 0.2, 0.2]
-        self.bg_buffer[9] = [0, mid, 0.2, 0.2, 0.2]
-        self.bg_buffer[10] = [W, H, 0.2, 0.2, 0.2]
-        self.bg_buffer[11] = [0, H, 0.2, 0.2, 0.2]
+        # Draw ceiling strips (from horizon up to top)
+        # Strips near horizon are darker (simulating distance)
+        for i in range(num_strips):
+            # y position: strip 0 is at horizon, strip (num_strips-1) is at top
+            y_bottom = mid - (i * strip_height)
+            y_top = mid - ((i + 1) * strip_height)
+            
+            # Calculate shade: near horizon (i=0) is dark, near top (i=num_strips) is bright
+            # This simulates looking at distant ceiling near horizon vs close ceiling above
+            shade = self.min_shade + (self.max_shade - self.min_shade) * (i / num_strips)
+            
+            r = self.ceiling_color[0] * shade
+            g = self.ceiling_color[1] * shade
+            b = self.ceiling_color[2] * shade
+            
+            # Two triangles per strip
+            self.bg_buffer[vertex_idx] = [0, y_top, r, g, b]
+            self.bg_buffer[vertex_idx + 1] = [W, y_top, r, g, b]
+            self.bg_buffer[vertex_idx + 2] = [W, y_bottom, r, g, b]
+            self.bg_buffer[vertex_idx + 3] = [0, y_top, r, g, b]
+            self.bg_buffer[vertex_idx + 4] = [W, y_bottom, r, g, b]
+            self.bg_buffer[vertex_idx + 5] = [0, y_bottom, r, g, b]
+            vertex_idx += 6
+        
+        # Draw floor strips (from horizon down to bottom)
+        # Strips near horizon are darker (simulating distance)
+        for i in range(num_strips):
+            # y position: strip 0 is at horizon, strip (num_strips-1) is at bottom
+            y_top = mid + (i * strip_height)
+            y_bottom = mid + ((i + 1) * strip_height)
+            
+            # Calculate shade: near horizon (i=0) is dark, near bottom (i=num_strips) is bright
+            shade = self.min_shade + (self.max_shade - self.min_shade) * (i / num_strips)
+            
+            r = self.floor_color[0] * shade
+            g = self.floor_color[1] * shade
+            b = self.floor_color[2] * shade
+            
+            # Two triangles per strip
+            self.bg_buffer[vertex_idx] = [0, y_top, r, g, b]
+            self.bg_buffer[vertex_idx + 1] = [W, y_top, r, g, b]
+            self.bg_buffer[vertex_idx + 2] = [W, y_bottom, r, g, b]
+            self.bg_buffer[vertex_idx + 3] = [0, y_top, r, g, b]
+            self.bg_buffer[vertex_idx + 4] = [W, y_bottom, r, g, b]
+            self.bg_buffer[vertex_idx + 5] = [0, y_bottom, r, g, b]
+            vertex_idx += 6
         
         glUseProgram(self.color_shader)
         proj_loc = glGetUniformLocation(self.color_shader, "projection")
@@ -313,8 +354,8 @@ class Renderer:
         
         glBindVertexArray(self.bg_vao)
         glBindBuffer(GL_ARRAY_BUFFER, self.bg_vbo)
-        glBufferSubData(GL_ARRAY_BUFFER, 0, self.bg_buffer.nbytes, self.bg_buffer)
-        glDrawArrays(GL_TRIANGLES, 0, 12)
+        glBufferSubData(GL_ARRAY_BUFFER, 0, self.bg_buffer[:vertex_idx].nbytes, self.bg_buffer[:vertex_idx])
+        glDrawArrays(GL_TRIANGLES, 0, vertex_idx)
         glBindVertexArray(0)
 
     # ------------------------------------------------------------
@@ -343,23 +384,48 @@ class Renderer:
     # ------------------------------------------------------------
 
     def draw_background(self, width, height):
+        """Draw background with distance-based shading (fallback/immediate mode)."""
         mid = height // 2
-
-        glColor3f(0.3, 0.3, 0.3)
-        glBegin(GL_QUADS)
-        glVertex2i(0, 0)
-        glVertex2i(width, 0)
-        glVertex2i(width, mid)
-        glVertex2i(0, mid)
-        glEnd()
-
-        glColor3f(0.2, 0.2, 0.2)
-        glBegin(GL_QUADS)
-        glVertex2i(0, mid)
-        glVertex2i(width, mid)
-        glVertex2i(width, height)
-        glVertex2i(0, height)
-        glEnd()
+        num_strips = self.floor_ceiling_strips
+        strip_height = mid / num_strips
+        
+        # Draw ceiling strips (from horizon up to top)
+        for i in range(num_strips):
+            y_bottom = mid - (i * strip_height)
+            y_top = mid - ((i + 1) * strip_height)
+            
+            shade = self.min_shade + (self.max_shade - self.min_shade) * (i / num_strips)
+            
+            r = self.ceiling_color[0] * shade
+            g = self.ceiling_color[1] * shade
+            b = self.ceiling_color[2] * shade
+            
+            glColor3f(r, g, b)
+            glBegin(GL_QUADS)
+            glVertex2f(0, y_top)
+            glVertex2f(width, y_top)
+            glVertex2f(width, y_bottom)
+            glVertex2f(0, y_bottom)
+            glEnd()
+        
+        # Draw floor strips (from horizon down to bottom)
+        for i in range(num_strips):
+            y_top = mid + (i * strip_height)
+            y_bottom = mid + ((i + 1) * strip_height)
+            
+            shade = self.min_shade + (self.max_shade - self.min_shade) * (i / num_strips)
+            
+            r = self.floor_color[0] * shade
+            g = self.floor_color[1] * shade
+            b = self.floor_color[2] * shade
+            
+            glColor3f(r, g, b)
+            glBegin(GL_QUADS)
+            glVertex2f(0, y_top)
+            glVertex2f(width, y_top)
+            glVertex2f(width, y_bottom)
+            glVertex2f(0, y_bottom)
+            glEnd()
 
     def get_flat_map(self):
         return [t for row in self.engine.map.map_grid for t in row]
