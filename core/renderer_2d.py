@@ -13,6 +13,10 @@ class Renderer2D:
         self.engine: Engine = engine
         self.minimap_scale = 0.2
         self.minimap_padding = 10
+        
+        # Ray visualization settings
+        self.show_rays = True
+        self.ray_skip = 40  # Draw every Nth ray to avoid clutter
 
         # Pre-render map geometry
         self.minimap_display_list = None
@@ -96,7 +100,11 @@ class Renderer2D:
         # Draw cached minimap
         glCallList(self.minimap_display_list)
 
-        # Draw player on minimap
+        # Draw rays if enabled
+        if self.show_rays:
+            self._draw_rays()
+
+        # Draw player on minimap (on top of rays)
         self._draw_player_on_minimap()
 
         # Restore matrices
@@ -104,6 +112,78 @@ class Renderer2D:
         glPopMatrix()
         glMatrixMode(GL_MODELVIEW)
         glPopMatrix()
+
+    # ---------------------------------------------------------
+    # DRAW RAYS ON MINIMAP
+    # ---------------------------------------------------------
+    def _draw_rays(self):
+        map = self.engine.map
+        player = self.engine.player
+        
+        W = self.engine.game.WINDOW_WIDTH
+        H = self.engine.game.WINDOW_HEIGHT
+
+        mini_size = min(W, H) * self.minimap_scale
+        aspect_ratio = map.grid_x / map.grid_y
+
+        mini_w = mini_size * aspect_ratio
+        mini_h = mini_size
+
+        mini_x = self.minimap_padding
+        mini_y = self.minimap_padding
+
+        # Player position on minimap
+        px = player.position.x
+        py = player.position.y
+        
+        player_screen_x = mini_x + (px / map.grid_x) * mini_w
+        player_screen_y = mini_y + (py / map.grid_y) * mini_h
+
+        # Get raycaster to cast rays
+        ray_count = 0
+        
+        # Enable line smoothing for better visuals
+        glEnable(GL_LINE_SMOOTH)
+        glEnable(GL_BLEND)
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+        
+        for ray_data in self.engine.raycaster.cast_rays():
+            # Only draw every Nth ray to reduce clutter
+            if ray_count % self.ray_skip != 0:
+                ray_count += 1
+                continue
+            
+            # Calculate hit point in world coordinates
+            perpWallDist = ray_data['perpWallDist']
+            rayDirX = ray_data['rayDirX']
+            rayDirY = ray_data['rayDirY']
+            
+            # Hit point in world space
+            hit_x = px + rayDirX * perpWallDist
+            hit_y = py + rayDirY * perpWallDist
+            
+            # Convert to screen coordinates
+            hit_screen_x = mini_x + (hit_x / map.grid_x) * mini_w
+            hit_screen_y = mini_y + (hit_y / map.grid_y) * mini_h
+            
+            # Draw ray line with slight transparency
+            glColor4f(1.0, 1.0, 0.0, 0.3)  # Yellow with alpha
+            glBegin(GL_LINES)
+            glVertex2f(player_screen_x, player_screen_y)
+            glVertex2f(hit_screen_x, hit_screen_y)
+            glEnd()
+            
+            # Draw hit point
+            glColor4f(1.0, 0.0, 0.0, 0.6)  # Red with alpha
+            glPointSize(3.0)
+            glBegin(GL_POINTS)
+            glVertex2f(hit_screen_x, hit_screen_y)
+            glEnd()
+            
+            ray_count += 1
+        
+        glDisable(GL_LINE_SMOOTH)
+        glDisable(GL_BLEND)
 
     # ---------------------------------------------------------
     # DRAW PLAYER MARKER (NOW USING TILE COORDINATES)
@@ -154,7 +234,3 @@ class Renderer2D:
             scaled_y + dir.y * 10
         )
         glEnd()
-
-    # ---------------------------------------------------------
-    def draw3D(self):
-        pass

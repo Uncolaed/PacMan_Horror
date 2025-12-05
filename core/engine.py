@@ -25,7 +25,7 @@ class Engine:
     def display(self):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         self.renderer3D.draw3D()
-        self.renderer2D.draw2D()
+        # self.renderer2D.draw2D()
         
     def handle_events(self):
         self.player.get_actions()
