@@ -18,7 +18,6 @@ class RayCaster:
         self.map: Map = engine.map
 
     def cast_rays(self):
-        """Cast rays and return wall intersection data"""
         posX = self.player.position.x
         posY = self.player.position.y
 
@@ -80,23 +79,35 @@ class RayCaster:
                 if self.map.map_grid[mapY][mapX] > 0:
                     hit = True
 
-                if not hit:
-                    continue
-                
-                if side == 0:
-                    perpWallDist = (sideDistX - deltaDistX  );                
-                else:
-                    perpWallDist = (sideDistY - deltaDistY);
+            if not hit:
+                continue
+            
+            if side == 0:
+                perpWallDist = (sideDistX - deltaDistX)
+            else:
+                perpWallDist = (sideDistY - deltaDistY)
 
-                #avoid division by zero or extremely small distances
-                if perpWallDist <= 1e-6:
-                    perpWallDist = 1e-6
+            #avoid division by zero or extremely small distances
+            if perpWallDist <= 1e-6:
+                perpWallDist = 1e-6
 
-                # Return ray data for rendering
-                yield {
-                    'x': x,
-                    'perpWallDist': perpWallDist,
-                    'side': side
-                }
+            # Calculate wallX for texturing
+            if side == 0:
+                wallX = posY + perpWallDist * rayDirY
+            else:
+                wallX = posX + perpWallDist * rayDirX
+            wallX -= math.floor(wallX)
+
+            # Return ray data for rendering
+            yield {
+                'x': x,
+                'perpWallDist': perpWallDist,
+                'side': side,
+                'mapX': mapX,
+                'mapY': mapY,
+                'wallX': wallX,
+                'rayDirX': rayDirX,
+                'rayDirY': rayDirY
+            }
 
 

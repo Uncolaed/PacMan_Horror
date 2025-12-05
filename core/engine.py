@@ -12,8 +12,8 @@ class Engine:
         self.game = game
         self.map = Map(self.game)
         self.player = Player(self)
-        # self.texture_manager = TextureManager()
-        # self.texture_manager.load_texture(TextureID.BRICK,self.game.dir+'/textures/brick.png')
+        self.texture_manager = TextureManager()
+        self.texture_manager.load_texture(TextureID.BRICK,self.game.dir+'/textures/brick.png')
         self.raycaster = RayCaster(self)
         self.renderer2D = Renderer2D(self)
         self.renderer3D = Renderer3D(self)
