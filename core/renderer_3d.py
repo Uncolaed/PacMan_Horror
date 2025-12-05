@@ -16,35 +16,38 @@ class Renderer3D:
     def __init__(self, engine):
         self.engine = engine
         self.player = engine.player
-        self.game: Game = engine.game
+        self.game = engine.game
         self.width = self.game.WINDOW_WIDTH
         self.height = self.game.WINDOW_HEIGHT
-        self.map: Map = engine.map
-        self.textureManger: TextureManager = engine.texture_manager
+        self.map = engine.map
+        self.textureManger = engine.texture_manager
         self.raycaster = RayCaster(engine)
         
-        # Use numpy array - contiguous memory layout
+        # Main render buffer
         self.buffer = np.zeros((self.height, self.width, 3), dtype=np.uint8)
-        
-        # Pre-calculate constants
         self.half_height = self.height // 2
         
-        # Cache texture dimensions and convert textures to numpy
+        # Texture stuff - set up once, use forever
         self.tex_width = None
         self.tex_height = None
-        self.tex_height_minus_1 = None
-        self.numpy_textures = {}  # Cache numpy versions of textures
+        self.numpy_textures = {}
         
-    def _convert_textures_to_numpy(self):
-        """Convert PIL textures to numpy arrays once - HUGE speedup"""
+        # Fog config
+        self.fog_start = -5
+        self.fog_end = 5
+        self.fog_color = np.array([10, 10, 10], dtype=np.uint8)
+        
+    def _load_textures(self):
+        """Convert textures to numpy arrays for faster access"""
         from textures.texture_manager import TextureID
         
-        if not self.numpy_textures:
-            for tex_id in TextureID:
-                if tex_id in self.textureManger.textures:
-                    # Convert list of lists to numpy array
-                    texture_data = self.textureManger.textures[tex_id]
-                    self.numpy_textures[tex_id] = np.array(texture_data, dtype=np.uint8)
+        if self.numpy_textures:
+            return
+            
+        for tex_id in TextureID:
+            if tex_id in self.textureManger.textures:
+                texture_data = self.textureManger.textures[tex_id]
+                self.numpy_textures[tex_id] = np.array(texture_data, dtype=np.uint8)
         
     def draw3D(self):
         self.clear_buffer()
@@ -52,86 +55,108 @@ class Renderer3D:
         self.draw_buffer()
     
     def clear_buffer(self):
-        # Numpy slice assignment
-        self.buffer[:self.half_height] = (50, 50, 50)  # Ceiling
-        self.buffer[self.half_height:] = (30, 30, 30)  # Floor
+        self._render_floor_ceiling()
     
     def draw_buffer(self):
-        # Use glDrawPixels - sends entire buffer at once
         glDrawPixels(self.width, self.height, GL_RGB, GL_UNSIGNED_BYTE, 
                      np.flipud(self.buffer))
     
     def render_walls(self):
         from textures.texture_manager import TextureID
         
-        # Initialize texture cache
+        # First time setup
         if self.tex_width is None:
             self.tex_width = self.textureManger.width
             self.tex_height = self.textureManger.height
-            self.tex_height_minus_1 = self.tex_height - 1
-            self._convert_textures_to_numpy()
+            self._load_textures()
         
-        texWidth = self.tex_width
-        texHeight = self.tex_height
-
-        tex_height_m1 = self.tex_height_minus_1
-        
-        half_h = self.half_height
-        height = self.height
-        
-        # Pre-fetch texture array (assuming BRICK for now)
         texture_np = self.numpy_textures[TextureID.BRICK]
         
-        # Process each ray
         for ray_data in self.raycaster.cast_rays():
             x = ray_data['x']
-            perpWallDist = ray_data['perpWallDist']
+            dist = ray_data['perpWallDist']
             
-            # Skip if too close (avoid division issues)
-            if perpWallDist < 0.01:
+            if dist < 0.01:
                 continue
             
-            side = ray_data['side']
-            mapX = ray_data['mapX']
-            mapY = ray_data['mapY']
-            wallX = ray_data['wallX']
-            rayDirX = ray_data['rayDirX']
-            rayDirY = ray_data['rayDirY']
+            # Wall height based on distance
+            wall_height = int(self.height / dist)
+            draw_start = max(0, -wall_height // 2 + self.half_height)
+            draw_end = min(self.height - 1, wall_height // 2 + self.half_height)
             
-            # Calculate wall slice height
-            lineHeight = int(height / perpWallDist)   
-            drawStart = max(0, -lineHeight // 2 + half_h)
-            drawEnd = min(height - 1, lineHeight // 2 + half_h)
-            
-            # Skip if nothing to draw
-            if drawStart >= drawEnd:
+            if draw_start >= draw_end:
                 continue
             
-            # Calculate texture X coordinate
-            texX = int(wallX * texWidth)
-            if side == 0 and rayDirX > 0:
-                texX = texWidth - texX - 1
-            if side == 1 and rayDirY < 0:
-                texX = texWidth - texX - 1
+            # Figure out which part of the texture to use
+            wall_x = ray_data['wallX']
+            tex_x = int(wall_x * self.tex_width)
             
-            # Clamp texX just in case
-            texX = max(0, min(texWidth - 1, texX))
+            # Flip texture on certain sides
+            if ray_data['side'] == 0 and ray_data['rayDirX'] > 0:
+                tex_x = self.tex_width - tex_x - 1
+            if ray_data['side'] == 1 and ray_data['rayDirY'] < 0:
+                tex_x = self.tex_width - tex_x - 1
             
-            # Texture mapping setup
-            step = texHeight / lineHeight
-            texPos = (drawStart - half_h + lineHeight / 2) * step
+            tex_x = max(0, min(self.tex_width - 1, tex_x))
             
-            # Calculate all texY values at once using numpy
-            num_pixels = drawEnd - drawStart
-            texY_positions = texPos + np.arange(num_pixels) * step
-            texY_indices = texY_positions.astype(np.int32) & tex_height_m1
+            # Map texture vertically
+            step = self.tex_height / wall_height
+            tex_start = (draw_start - self.half_height + wall_height / 2) * step
             
-            # Extract the entire column from texture in one operation
-            column_colors = texture_np[texY_indices, texX]
+            num_pixels = draw_end - draw_start
+            tex_positions = tex_start + np.arange(num_pixels) * step
+            tex_indices = tex_positions.astype(np.int32) & (self.tex_height - 1)
             
-            # Apply darkening for Y-side walls
-            if side == 1:
-                column_colors = column_colors >> 1
+            # Grab the whole column at once
+            colors = texture_np[tex_indices, tex_x]
             
-            # Write entire column to buffer at once
-            self.buffer[drawStart:drawEnd, x] = column_colors
+            # Darken walls facing different direction
+            if ray_data['side'] == 1:
+                colors = colors >> 1
+            
+            # Add fog
+            fog = self._calc_fog(dist)
+            if fog > 0:
+                colors = self._blend_fog(colors, fog)
+            
+            self.buffer[draw_start:draw_end, x] = colors
+    
+    def _calc_fog(self, distance):
+        """How much fog? 0 = none, 1 = thick"""
+        if distance < self.fog_start:
+            return 0.0
+        elif distance > self.fog_end:
+            return 1.0
+        return (distance - self.fog_start) / (self.fog_end - self.fog_start)
+    
+    def _blend_fog(self, colors, fog_amount):
+        """Mix wall color with fog"""
+        return (colors * (1 - fog_amount) + self.fog_color * fog_amount).astype(np.uint8)
+    
+    def _render_floor_ceiling(self):
+        """Draw floor and ceiling with distance fade"""
+        ceiling = np.array([50, 50, 50], dtype=np.float32)
+        floor = np.array([30, 30, 30], dtype=np.float32)
+        
+        # Draw from horizon down
+        for y in range(self.half_height, self.height):
+            p = y - self.half_height
+            row_dist = (0.5 * self.height) / p if p != 0 else 0.001
+            
+            fog = self._calc_fog(row_dist)
+            
+            # Floor with fog
+            if fog > 0:
+                floor_color = floor * (1 - fog) + self.fog_color * fog
+            else:
+                floor_color = floor
+            
+            # Ceiling with fog (mirrored)
+            ceiling_y = self.height - y - 1
+            if fog > 0:
+                ceiling_color = ceiling * (1 - fog) + self.fog_color * fog
+            else:
+                ceiling_color = ceiling
+            
+            self.buffer[y, :] = floor_color.astype(np.uint8)
+            self.buffer[ceiling_y, :] = ceiling_color.astype(np.uint8)
