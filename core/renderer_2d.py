@@ -119,7 +119,7 @@ class Renderer2D:
         # Get player world position
         player_x = player.position.x
         player_y = player.position.y
-        player_angle = player.player_angle
+        player_dir = player.dir  # Get direction vector
         
         # Calculate world dimensions
         map_w = map.grid_x * map.grid_size
@@ -150,14 +150,14 @@ class Renderer2D:
                       scaled_py + radius * math.sin(angle))
         glEnd()
         
-        # Draw player direction indicator
+        # Draw player direction indicator using direction vector
         line_length = 8
         glColor3f(1.0, 0.0, 0.0)  # Red
         glLineWidth(2)
         glBegin(GL_LINES)
         glVertex2f(scaled_px, scaled_py)
-        glVertex2f(scaled_px + line_length * math.cos(player_angle), 
-                  scaled_py + line_length * math.sin(player_angle))
+        glVertex2f(scaled_px + player_dir.x * line_length, 
+                  scaled_py + player_dir.y * line_length)
         glEnd()
 
 
