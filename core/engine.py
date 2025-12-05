@@ -24,8 +24,7 @@ class Engine:
         
     def display(self):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-        # self.renderer3D.draw3D()
-        self.raycaster.cast_rays()
+        self.renderer3D.draw3D()
         self.renderer2D.draw2D()
         
     def handle_events(self):

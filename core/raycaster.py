@@ -1,7 +1,5 @@
 import math
 import pygame as pg
-from OpenGL.GL import *
-from OpenGL.GLU import * 
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -20,6 +18,7 @@ class RayCaster:
         self.map: Map = engine.map
 
     def cast_rays(self):
+        """Cast rays and return wall intersection data"""
         posX = self.player.position.x
         posY = self.player.position.y
 
@@ -93,25 +92,11 @@ class RayCaster:
                 if perpWallDist <= 1e-6:
                     perpWallDist = 1e-6
 
-                # Calculate distance to wall
-                lineHeight = int(self.height / perpWallDist)   
-
-                drawStart = -lineHeight // 2 + self.height // 2
-                if drawStart < 0:
-                    drawStart = 0
-                drawEnd = lineHeight // 2 + self.height // 2
-                if drawEnd >= self.height:
-                    drawEnd = self.height - 1
-
-                #draw the vertical line
-                if hit:
-                    if side==0:
-                        glColor3f(1,1,1)
-                    else:
-                        glColor3f(0.9,0.9,0.9)
-                glBegin(GL_LINES)
-                glVertex2f(x + 0.5, drawStart)  # x+0.5 centers the line on the pixel column
-                glVertex2f(x + 0.5, drawEnd)
-                glEnd()
+                # Return ray data for rendering
+                yield {
+                    'x': x,
+                    'perpWallDist': perpWallDist,
+                    'side': side
+                }
 
 
