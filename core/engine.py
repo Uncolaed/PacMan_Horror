@@ -14,7 +14,7 @@ class Engine:
         self.player = Player(self)
         # self.texture_manager = TextureManager()
         # self.texture_manager.load_texture(TextureID.BRICK,self.game.dir+'/textures/brick.png')
-        # self.raycaster = RayCaster(self)
+        self.raycaster = RayCaster(self)
         self.renderer2D = Renderer2D(self)
         self.renderer3D = Renderer3D(self)
         
@@ -25,6 +25,7 @@ class Engine:
     def display(self):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         # self.renderer3D.draw3D()
+        self.raycaster.cast_rays()
         self.renderer2D.draw2D()
         
     def handle_events(self):

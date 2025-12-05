@@ -1,36 +1,60 @@
-import pygame, os,csv
+import os
+import csv
 
-from OpenGL.GL import *
-from OpenGL.GLU import *
 
-class Map():
-    def __init__(self, game):
+class Map:
+    def __init__(self, game, filename="level.csv"):
         self.game = game
-        self.grid_x, self.grid_y = 8,8
-        self.grid_size = 64
-        self.map_file_name = 'level.csv'
+        self.map_file_name = filename
+
+        self.map_grid = []
+        self.grid_x = 0
+        self.grid_y = 0
+
+        # Tile size is ONLY for rendering (not raycasting)
+        self.grid_size = 64     
+
+        # Spawn in TILE coordinates
         self.player_spawn = None
+
         self.load_world()
 
-    
-
+    # -------------------------------------------------------------
+    # Load CSV map and extract tile grid + player spawn
+    # -------------------------------------------------------------
     def load_world(self):
-        # Loads the world from a csv file
-        with open(os.path.join(self.game.dir, "maps",self.map_file_name)) as data:
-            data = csv.reader(data,delimiter = ',')
-            self.map_grid = []
-            for row in data:
-                self.map_grid.append(list(row))
-            
-            # Find player spawn and convert to int
-            for y, row in enumerate(self.map_grid):
-                for x, tile in enumerate(row):
-                    if tile == 'P':
-                        # Store spawn position (center of tile)
-                        self.player_spawn = (x * self.grid_size + self.grid_size // 2, 
-                                            y * self.grid_size + self.grid_size // 2)
-                        # Replace 'P' with empty space (0)
-                        self.map_grid[y][x] = 0
-                    else:
-                        # Convert string to int
-                        self.map_grid[y][x] = int(tile)
+        path = os.path.join(self.game.dir, "maps", self.map_file_name)
+
+        with open(path, "r") as file:
+            reader = csv.reader(file, delimiter=",")
+            self.map_grid = [list(row) for row in reader]
+
+        # Convert tiles and extract 'P' spawn
+        for y, row in enumerate(self.map_grid):
+            for x, tile in enumerate(row):
+
+                # Player start tile
+                if tile == "P":
+                    # Store spawn in TILE coordinates
+                    self.player_spawn = (x + 0.5, y + 0.5)
+                    self.map_grid[y][x] = 0  # Replace with empty
+
+                else:
+                    # Convert string to int
+                    self.map_grid[y][x] = int(tile)
+
+        # Map dimensions (in tiles)
+        self.grid_y = len(self.map_grid)
+        self.grid_x = len(self.map_grid[0]) if self.grid_y > 0 else 0
+
+    # -------------------------------------------------------------
+    # Optional helper: safe tile lookup
+    # -------------------------------------------------------------
+    def get_tile(self, x, y):
+        """Return tile ID or treat out-of-bounds as wall."""
+        if x < 0 or x >= self.grid_x:
+            return 1  # boundary wall
+        if y < 0 or y >= self.grid_y:
+            return 1
+
+        return self.map_grid[y][x]
